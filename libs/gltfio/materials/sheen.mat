@@ -1,16 +1,15 @@
 material {
-    name : volume_${SHADINGMODEL}_${BLENDING},
+    name : sheen_ubershader,
     requires : [ uv0, uv1, color ],
-    shadingModel : ${SHADINGMODEL},
-    blending : masked,
-    doubleSided : ${DOUBLESIDED},
-    transparency : ${TRANSPARENCY},
+    shadingModel : lit,
+    blending : opaque,
+    depthWrite : true,
+    doubleSided : false,
+    transparency : default,
     flipUV : false,
     specularAmbientOcclusion : simple,
     specularAntiAliasing : true,
-    refractionMode: screenspace,
-    refractionType: solid,
-    reflections: screenspace,
+    reflections : screenspace,
     parameters : [
 
         // Base Color
@@ -45,21 +44,18 @@ material {
         { type : sampler2d, name : emissiveMap },
         { type : mat3, name : emissiveUvMatrix, precision: high },
 
-        // Transmission Map
-        { type : int, name : transmissionIndex },
-        { type : float, name : transmissionFactor },
-        { type : sampler2d, name : transmissionMap },
-        { type : mat3, name : transmissionUvMatrix, precision: high },
+        // Sheen Map
+        { type : int, name : sheenColorIndex },
+        { type : float3, name : sheenColorFactor },
+        { type : sampler2d, name : sheenColorMap },
+        { type : mat3, name : sheenColorUvMatrix, precision: high },
+        { type : int, name : sheenRoughnessIndex },
+        { type : float, name : sheenRoughnessFactor },
+        { type : sampler2d, name : sheenRoughnessMap },
+        { type : mat3, name : sheenRoughnessUvMatrix, precision: high },
 
-        // Volume Map
-        { type : float3, name : volumeAbsorption },
-        { type : int, name : volumeThicknessIndex },
-        { type : float, name : volumeThicknessFactor },
-        { type : sampler2d, name : volumeThicknessMap },
-        { type : mat3, name : volumeThicknessUvMatrix, precision: high },
-
-        // IOR
-        { type : float, name : ior }
+        // Reflectance
+        { type : float, name : reflectance }
     ],
 }
 
@@ -93,24 +89,23 @@ fragment {
 
         material.roughness = materialParams.roughnessFactor;
         material.metallic = materialParams.metallicFactor;
-        material.transmission = materialParams.transmissionFactor;
-        material.absorption = materialParams.volumeAbsorption;
-        material.thickness = materialParams.volumeThicknessFactor * objectUniforms.userData;
-        material.ior = materialParams.ior;
+        material.sheenColor = materialParams.sheenColorFactor;
+        material.sheenRoughness = materialParams.sheenRoughnessFactor;
+        material.reflectance = materialParams.reflectance;
 
         material.emissive = vec4(materialParams.emissiveStrength *
                 materialParams.emissiveFactor.rgb, 0.0);
 
-        if (materialParams.transmissionIndex > -1) {
-            highp float2 uv = uvs[materialParams.transmissionIndex];
-            uv = (vec3(uv, 1.0) * materialParams.transmissionUvMatrix).xy;
-            material.transmission *= texture(materialParams_transmissionMap, uv).r;
+        if (materialParams.sheenColorIndex > -1) {
+            highp float2 uv = uvs[materialParams.sheenColorIndex];
+            uv = (vec3(uv, 1.0) * materialParams.sheenColorUvMatrix).xy;
+            material.sheenColor *= texture(materialParams_sheenColorMap, uv).rgb;
         }
 
-        if (materialParams.volumeThicknessIndex > -1) {
-            highp float2 uv = uvs[materialParams.volumeThicknessIndex];
-            uv = (vec3(uv, 1.0) * materialParams.volumeThicknessUvMatrix).xy;
-            material.thickness *= texture(materialParams_volumeThicknessMap, uv).g;
+        if (materialParams.sheenRoughnessIndex > -1) {
+            highp float2 uv = uvs[materialParams.sheenRoughnessIndex];
+            uv = (vec3(uv, 1.0) * materialParams.sheenRoughnessUvMatrix).xy;
+            material.sheenRoughness *= texture(materialParams_sheenRoughnessMap, uv).a;
         }
 
         if (materialParams.metallicRoughnessIndex > -1) {

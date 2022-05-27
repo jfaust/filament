@@ -1,15 +1,15 @@
 material {
-    name : transmission_${SHADINGMODEL}_${BLENDING},
+    name : volume_ubershader,
     requires : [ uv0, uv1, color ],
-    shadingModel : ${SHADINGMODEL},
+    shadingModel : lit,
     blending : masked,
-    doubleSided : ${DOUBLESIDED},
-    transparency : ${TRANSPARENCY},
+    doubleSided : false,
+    transparency : default,
     flipUV : false,
     specularAmbientOcclusion : simple,
     specularAntiAliasing : true,
     refractionMode: screenspace,
-    refractionType: thin,
+    refractionType: solid,
     reflections: screenspace,
     parameters : [
 
@@ -51,6 +51,13 @@ material {
         { type : sampler2d, name : transmissionMap },
         { type : mat3, name : transmissionUvMatrix, precision: high },
 
+        // Volume Map
+        { type : float3, name : volumeAbsorption },
+        { type : int, name : volumeThicknessIndex },
+        { type : float, name : volumeThicknessFactor },
+        { type : sampler2d, name : volumeThicknessMap },
+        { type : mat3, name : volumeThicknessUvMatrix, precision: high },
+
         // IOR
         { type : float, name : ior }
     ],
@@ -87,6 +94,8 @@ fragment {
         material.roughness = materialParams.roughnessFactor;
         material.metallic = materialParams.metallicFactor;
         material.transmission = materialParams.transmissionFactor;
+        material.absorption = materialParams.volumeAbsorption;
+        material.thickness = materialParams.volumeThicknessFactor * objectUniforms.userData;
         material.ior = materialParams.ior;
 
         material.emissive = vec4(materialParams.emissiveStrength *
@@ -96,6 +105,12 @@ fragment {
             highp float2 uv = uvs[materialParams.transmissionIndex];
             uv = (vec3(uv, 1.0) * materialParams.transmissionUvMatrix).xy;
             material.transmission *= texture(materialParams_transmissionMap, uv).r;
+        }
+
+        if (materialParams.volumeThicknessIndex > -1) {
+            highp float2 uv = uvs[materialParams.volumeThicknessIndex];
+            uv = (vec3(uv, 1.0) * materialParams.volumeThicknessUvMatrix).xy;
+            material.thickness *= texture(materialParams_volumeThicknessMap, uv).g;
         }
 
         if (materialParams.metallicRoughnessIndex > -1) {
