@@ -18,6 +18,8 @@
 
 #include <utils/memalign.h>
 
+#include <zstd.h>
+
 using namespace utils;
 
 // Set this to a certain spec index to find out why it was deemed unsuitable.
@@ -38,12 +40,14 @@ static bool strIsEqual(const CString& a, const char* b) {
     return strncmp(a.c_str(), b, a.size()) == 0;
 }
 
-// This uberz file format involves zero parsing. Just copy the data blob into a struct and convert
-// all offset fields into pointers.
-void ArchiveCache::load(void* archiveData, uint64_t archiveByteCount) {
-    assert_invariant(mArchive == nullptr);
-    uint64_t* basePointer = (uint64_t*) utils::aligned_alloc(archiveByteCount, 8);
-    memcpy(basePointer, archiveData, archiveByteCount);
+void ArchiveCache::load(const void* archiveData, uint64_t archiveByteCount) {
+    assert_invariant(mArchive == nullptr && "Do not call load() twice");
+    size_t decompSize = ZSTD_getFrameContentSize(archiveData, archiveByteCount);
+    if (decompSize == ZSTD_CONTENTSIZE_UNKNOWN || decompSize == ZSTD_CONTENTSIZE_ERROR) {
+        #warning TODO: Panic
+    }
+    uint64_t* basePointer = (uint64_t*) utils::aligned_alloc(decompSize, 8);
+    ZSTD_decompress(basePointer, decompSize, archiveData, archiveByteCount);
     mArchive = (ReadableArchive*) basePointer;
     convertOffsetsToPointers(mArchive);
     mMaterials = FixedCapacityVector<Material*>(mArchive->specsCount, nullptr);

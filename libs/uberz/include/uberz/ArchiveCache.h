@@ -39,7 +39,7 @@ namespace filament::uberz {
         ArchiveCache(filament::Engine& engine) : mEngine(engine) {}
         ~ArchiveCache();
 
-        void load(void* archiveData, uint64_t archiveByteCount);
+        void load(const void* archiveData, uint64_t archiveByteCount);
         filament::Material* getMaterial(const ArchiveRequirements& requirements);
         filament::Material* getDefaultMaterial();
         const filament::Material* const* getMaterials() const noexcept { return mMaterials.data(); }

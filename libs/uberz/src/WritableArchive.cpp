@@ -177,6 +177,7 @@ void WritableArchive::addSpecLine(const char* line) {
         slog.e
             << material.name.c_str() << ".spec(" << mLineNumber << ","  << column << "): "
             << msg << io::endl;
+        #warning TODO: Panic postcondition
         exit(1);
     };
 
@@ -312,8 +313,8 @@ FixedCapacityVector<uint8_t> WritableArchive::serialize() const {
     }
     assert(flagNamesPtr - flagNames.data() == flagNames.size());
 
-    FixedCapacityVector<uint8_t> outputBuffer(byteCount);
-    uint8_t* writeCursor = outputBuffer.data();
+    FixedCapacityVector<uint8_t> outputBuf(byteCount);
+    uint8_t* writeCursor = outputBuf.data();
     memcpy(writeCursor, &archive, sizeof(archive));
     writeCursor += sizeof(archive);
     memcpy(writeCursor, specs.data(), sizeof(ArchiveSpec) * specs.size());
@@ -326,11 +327,23 @@ FixedCapacityVector<uint8_t> WritableArchive::serialize() const {
         memcpy(writeCursor, mat.package.data(), mat.package.size());
         writeCursor += mat.package.size();
     }
-    assert_invariant(writeCursor - outputBuffer.data() == outputBuffer.size());
+    assert_invariant(writeCursor - outputBuf.data() == outputBuf.size());
 
-    // Some compilers might perform copy elision it we simply returned outputBuffer here.
+    FixedCapacityVector<uint8_t> compressedBuf(ZSTD_compressBound(outputBuf.size()));
+    size_t zstdResult = ZSTD_compress(compressedBuf.data(), compressedBuf.size(), outputBuf.data(),
+            outputBuf.size(), ZSTD_maxCLevel());
+    if (ZSTD_isError(zstdResult)) {
+        slog.e << "Error while compressing the archive: "
+                << ZSTD_getErrorName(zstdResult) << io::endl;
+        #warning TODO: Panic postcondition
+        exit(1);
+    }
+
+    compressedBuf.resize(zstdResult);
+
+    // Some compilers might perform copy elision it we simply returned compressedBuf here.
     // However, by moving it into a brand new object, we can *guarantee* copy elision.
-    return FixedCapacityVector<uint8_t>(std::move(outputBuffer));
+    return FixedCapacityVector<uint8_t>(std::move(compressedBuf));
 }
 
 } // namespace filament::uberz
