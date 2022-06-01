@@ -52,11 +52,11 @@ static constexpr filament::BlendingMode INVALID_BLENDING = (filament::BlendingMo
 struct ArchiveSpec {
     union {
         filament::Shading shadingModel;
-        uint32_t shadingModelValue;
+        uint32_t padding0;
     };
     union {
         filament::BlendingMode blendingMode;
-        uint32_t blendingModeValue;
+        uint32_t padding1;
     };
     uint64_t flagsCount;
     union {

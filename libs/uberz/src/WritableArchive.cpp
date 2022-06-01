@@ -17,6 +17,8 @@
 #include <uberz/WritableArchive.h>
 #include <uberz/ReadableArchive.h>
 
+#include <zstd.h>
+
 #include <utils/Log.h>
 
 using namespace utils;
