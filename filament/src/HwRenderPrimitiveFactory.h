@@ -22,6 +22,10 @@
 
 #include <private/backend/DriverApi.h>
 
+#include <tsl/robin_map.h>
+
+#include <set>
+
 #include <stdint.h>
 
 namespace filament {
@@ -54,7 +58,28 @@ public:
             backend::RenderPrimitiveHandle rph) noexcept;
 
 private:
+    struct Entry {
+        backend::VertexBufferHandle vbh;            // 4
+        backend::IndexBufferHandle ibh;             // 4
+        uint32_t offset;                            // 4
+        uint32_t count;                             // 4
+        backend::PrimitiveType type :  8;           // 1
 
+        mutable uint32_t refs       : 24;           // 3
+        backend::RenderPrimitiveHandle handle;      // 4
+    };
+
+    static_assert(sizeof(Entry) == 24);
+
+    using Set = std::set<Entry, std::less<>>;
+    using Map = tsl::robin_map<backend::RenderPrimitiveHandle::HandleId, Set::const_iterator>;
+
+    // set of HwRenderPrimitive data
+    Set mSet;
+    // map of RenderPrimitiveHandle to Set Entry
+    Map mMap;
+
+    friend bool operator<(Entry const& lhs, Entry const& rhs) noexcept;
 };
 
 } // namespace filament

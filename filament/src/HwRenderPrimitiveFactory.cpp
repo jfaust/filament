@@ -16,28 +16,87 @@
 
 #include "HwRenderPrimitiveFactory.h"
 
+#include <stdlib.h>
+
 namespace filament {
 
+using namespace utils;
 using namespace backend;
 
-HwRenderPrimitiveFactory::HwRenderPrimitiveFactory() {
+bool operator<(HwRenderPrimitiveFactory::Entry const& lhs,
+        HwRenderPrimitiveFactory::Entry const& rhs) noexcept {
+    if (lhs.vbh == rhs.vbh) {
+        if (lhs.ibh == rhs.ibh) {
+            if (lhs.offset == rhs.offset) {
+                if (lhs.count == rhs.count) {
+                    return lhs.type < rhs.type;
+                } else {
+                    return lhs.count < rhs.count;
+                }
+            } else {
+                return lhs.offset < rhs.offset;
+            }
+        } else {
+            return lhs.ibh < rhs.ibh;
+        }
+    } else {
+        return lhs.vbh < rhs.vbh;
+    }
 }
 
-HwRenderPrimitiveFactory::~HwRenderPrimitiveFactory() noexcept {
-}
+// ------------------------------------------------------------------------------------------------
+
+HwRenderPrimitiveFactory::HwRenderPrimitiveFactory() = default;
+
+HwRenderPrimitiveFactory::~HwRenderPrimitiveFactory() noexcept = default;
 
 void HwRenderPrimitiveFactory::terminate(DriverApi& driver) noexcept {
+    assert_invariant(mMap.empty());
+    assert_invariant(mSet.empty());
 }
 
 RenderPrimitiveHandle HwRenderPrimitiveFactory::create(DriverApi& driver,
         VertexBufferHandle vbh, IndexBufferHandle ibh,
         PrimitiveType type, uint32_t offset, uint32_t minIndex, uint32_t maxIndex,
         uint32_t count) noexcept {
-    return driver.createRenderPrimitive(vbh, ibh, type, offset, minIndex, maxIndex, count);
+
+    Entry key = { vbh, ibh, offset, count, type, 1, {} };
+
+    // see if we already have seen this RenderPrimitive
+    auto pos = mSet.find(key);
+
+    // the common case is that we've never seen it (i.e.: no reuse)
+    if (UTILS_LIKELY(pos == mSet.end())) {
+        // create the backend object
+        auto handle = driver.createRenderPrimitive(vbh, ibh,
+                type, offset, minIndex, maxIndex, count);
+        // insert key/handle in our set with a refcount of 1
+        // IMPORTANT: std::set<> doesn't invalidate iterators in insert/erase
+        key.handle = handle;
+        auto [ipos, _] = mSet.insert(key);
+        // map the handle back to the key/payload
+        mMap.insert({ handle.getId(), ipos });
+        return handle;
+    }
+    pos->refs++;
+    return pos->handle;
 }
 
 void HwRenderPrimitiveFactory::destroy(DriverApi& driver, RenderPrimitiveHandle rph) noexcept {
-    driver.destroyRenderPrimitive(rph);
+    // look for this handle in our map
+    auto pos = mMap.find(rph.getId());
+
+    // it must be there
+    assert_invariant(pos != mMap.end());
+
+    // check the refcount and destroy if needed
+    auto ipos = pos->second;
+    ipos->refs = ipos->refs - 1;
+    if (ipos->refs == 0) {
+        mSet.erase(ipos);
+        mMap.erase(pos);
+        driver.destroyRenderPrimitive(rph);
+    }
 }
 
 } // namespace filament
